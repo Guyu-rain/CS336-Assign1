@@ -3,17 +3,17 @@ import collections
 import regex as re
 from typing import BinaryIO
 from multiprocessing import Pool, cpu_count
-
-DATA_PATH = "./data/TinyStoriesV2-GPT4-train.txt"
-PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+from __init__ import DATA_PATH, PAT
 
 # 辅助函数
-def word_to_token_tuple(word: str) -> tuple[bytes, ...]:
+def word_to_token_tuple(
+    word: str
+) -> tuple[bytes, ...]:
     """ 将一个 pre-token 转换成初始byte token sequence """
     byte_sequence = word.encode("utf-8")
     return tuple(bytes([b]) for b in byte_sequence)
 
-def find_chunk_boundaries(
+def _find_chunk_boundaries(
     file: BinaryIO,
     desired_num_chunks: int,
     split_special_token: bytes,
@@ -61,9 +61,9 @@ def find_chunk_boundaries(
     # Make sure all boundaries are unique, but might be fewer than desired_num_chunks
     return sorted(set(chunk_boundaries))
 
-##
-# Stage 1. 并行 pre-tokenization
-##
+"""
+    Stage 1: 并行 pre-tokenize
+"""
 def _pretokenize_chunk(
     args: tuple[str, int, int, list[str]]
 ) -> dict[tuple[bytes, ...], int]:
@@ -108,11 +108,11 @@ def parallel_pretokenize(
     special_tokens: list[str],
     num_workers: int
 ) -> dict[tuple[bytes, ...], int]:
-    """ 多进程 并行读区文件 + 统计 pre-token 频次 """
+    """ 多进程 并行读取文件 + 统计 pre-token 频次 """
     with open(input_path, "rb") as f:
         # 用第一个 special token 作为 chunk 分割点
         split_token = special_tokens[0].encode("utf-8") if special_tokens else b"\n\n"
-        boundaries = find_chunk_boundaries(f, num_workers, split_token)
+        boundaries = _find_chunk_boundaries(f, num_workers, split_token)
 
     chunks_boundaries = list(zip(boundaries[: -1], boundaries[1: ]))
     args = [(input_path, start, end, special_tokens) for start, end in chunks_boundaries]
@@ -122,7 +122,10 @@ def parallel_pretokenize(
     
     return _merge_corpus_dicts(partial_corpora)
 
-# Stage 2: 维护corpus
+
+"""
+    Stage 2: 构建 pair_counts + merge 维护 corpus
+"""
 def _build_pair_counts(
     corpus: dict[tuple[bytes, ...], int],
 ) -> dict[tuple[bytes, bytes], int]:
@@ -192,10 +195,10 @@ def _apply_merge(
 
     return new_corpus
 
-# ---------------------------------------------------------------------------
-# Main training function
-# ---------------------------------------------------------------------------
- 
+
+"""
+    train_bpe
+"""
 def train_bpe(
     input_path: str,
     vocab_size: int,
@@ -281,7 +284,7 @@ def train_bpe(
 
 if __name__ == "__main__":
     import time
- 
+    print(os.listdir())
     start = time.perf_counter()
     vocab, merges = train_bpe(DATA_PATH, 10000, ["<|endoftext|>"])
     elapsed = time.perf_counter() - start
