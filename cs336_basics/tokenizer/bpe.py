@@ -2,16 +2,15 @@ import regex as re
 from typing import Iterable, Iterator
 from __init__ import DATA_PATH, PAT
 
-def word_to_token_tuple(
+def word_to_token_list(
     word: str,
-) -> tuple[bytes, ...]:
+) -> list[bytes]:
     bytes_sequence = word.encode("utf-8")
-    return tuple(bytes([b]) for b in bytes_sequence)
+    return [bytes([b]) for b in bytes_sequence]
 
 def pretokenize_to_str(
     text: str,
     special_tokens: list[str],
-    vocab: dict[int, bytes],
     pattern: str=PAT,
 ) -> list[str]:
     if special_tokens:
@@ -58,22 +57,40 @@ class BPE:
     ):
         pass
 
+    def _merge_piece(self, piece: str) -> list[bytes]:
+        piece_tokens = list(word_to_token_list(piece))
+
+        for first, second in self.merges:
+            new_piece = []
+            i = 0
+            while i < len(piece_tokens):
+                if (
+                    i < len(piece_tokens) - 1
+                    and piece_tokens[i] == first
+                    and piece_tokens[i + 1] == second
+                ):
+                    new_piece.append(first + second)
+                    i += 2
+                else:
+                    new_piece.append(piece_tokens[i])
+                    i += 1
+            piece_tokens = new_piece
+        return piece_tokens
+
+
     # "the cat ate" -> [9, 7, 1, 5, 10, 3]
     def encode(
         self, 
         text: str
     ) -> list[int]:
-        ids = []
+        output_ids = []
         for piece in pretokenize_to_str(text, self.special_tokens):
-            if piece in self.special_tokens:
-                ids.append(self.special_token_to_id[piece])
+            if piece in self.special_token_to_id: # 查字典，比查 list 快
+                output_ids.append(self.special_token_to_id[piece])
             else:
-                ids.append(word_to_token_tuple(piece))
-        # 执行 merge
-        for piece in ids:
-            if isinstance(piece, int):
-                continue
-        return ids
+                merged_piece = self._merge_piece(piece)
+                output_ids.extend(self.token_to_id[tok] for tok in merged_piece)
+        return output_ids
 
     def encode_iterable(
         self, 
