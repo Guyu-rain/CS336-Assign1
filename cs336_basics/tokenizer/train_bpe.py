@@ -3,6 +3,7 @@ import collections
 import regex as re
 from typing import BinaryIO
 from multiprocessing import Pool, cpu_count
+from tqdm import tqdm
 from __init__ import DATA_PATH, PAT
 
 # 辅助函数
@@ -256,7 +257,7 @@ def train_bpe(
     # ------------------------------------------------------------------
     merges: list[tuple[bytes, bytes]] = []
  
-    for _ in range(num_merges):
+    for _ in tqdm(range(num_merges), desc="Training BPE", unit="merge"):
         if not pair_counts:
             break
  
