@@ -128,7 +128,7 @@ def run_scaled_dot_product_attention(
     """
     return scaled_dot_product_attention(Q, K, V, mask)
 
-
+from cs336_basics.model.pre_norm_transformer_block import MultiheadSelfAttention
 def run_multihead_self_attention(
     d_model: int,
     num_heads: int,
@@ -160,7 +160,7 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    multihead_self_attention = MultiheadSelfAttention(d_model, num_heads, )
 
 
 def run_multihead_self_attention_with_rope(

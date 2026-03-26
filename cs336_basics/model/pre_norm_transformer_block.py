@@ -178,27 +178,71 @@ class MultiheadSelfAttention(nn.Module):
         self,
         d_model: int,
         num_heads: int,
-        device: torch.device | None=None
+        device: torch.device | None = None,
+        theta: float = 10000.0,
+        max_seq_len: int = 4096
     ):
         super().__init__()
-        d_k = d_v = d_model // num_heads
 
-        self.w_q = Linear(d_model, d_model)
-        self.w_k = Linear(d_model, d_model)
-        self.w_v = Linear(d_model, d_model)
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
 
-        self.w_o = Linear(d_model, d_model)
+        self.w_q = Linear(d_model, d_model, device=device)
+        self.w_k = Linear(d_model, d_model, device=device)
+        self.w_v = Linear(d_model, d_model, device=device)
 
-        self.rope_k = RotaryPositionalEmbedding(0, d_k, d_k, device)
-        self.rope_w = RotaryPositionalEmbedding(0., d_k, d_k, device)
+        self.w_o = Linear(d_model, d_model, device=device)
+
+        self.rope_q = RotaryPositionalEmbedding(
+            theta=theta,
+            d_k=self.d_k,
+            max_seq_len=max_seq_len,
+            device=device,
+        )
+
+        self.rope_k = RotaryPositionalEmbedding(
+            theta=theta,
+            d_k=self.d_k,
+            max_seq_len=max_seq_len,
+            device=device,
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        mask = torch.triu(torch.ones_like(x[-2:]), 0)
+        """
+        input:
+            x: (..., seq_len, d_model)
+        output:
+            (..., seq_len, d_model)
+        """
+        seq_len = x.shape[-2]
 
-        queries = self.w_q(x) + self.rope_w(x)
-        keys = self.w_k(x) + self.rope_k(x)
-        values = self.w_v(x)
+        # 映射成 queries, keys, values
+        q = self.w_q(x)
+        k = self.w_k(x)
+        v = self.w_v(x)
 
-        attn = scaled_dot_product_attention(queries, keys, values, ~mask)
+        # 切分成多个头
+        q = q.view(*x.shape[:-2], seq_len, self.num_heads, self.d_k)
+        k = k.view(*x.shape[:-2], seq_len, self.num_heads, self.d_k)
+        v = v.view(*x.shape[:-2], seq_len, self.num_heads, self.d_k)
+
+        q = q.transpose(-3, -2)
+        k = k.transpose(-3, -2)
+        v = v.transpose(-3, -2)
+
+        token_position = torch.arange(seq_len, device=x.device)
+
+        q = self.rope_q(q, token_position)
+        k = self.rope_k(k, token_position)
+
+        mask = torch.tril(
+            torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool)
+        )
+
+        attn = scaled_dot_product_attention(q, k, v, mask)
+        
+        attn = attn.transpose(-3, -2)
+        attn = attn.reshape(*x.shape[-2], seq_len, self.d_model)
 
         return self.w_o(attn)
