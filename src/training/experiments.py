@@ -1,5 +1,8 @@
+import argparse
+import json
 from dataclasses import replace
 
+from src.training.config import load_run_config
 from src.training.experiment import ExperimentLogger
 from src.training.train_loop import (
     TrainingConfig,
@@ -128,3 +131,37 @@ def run_batch_size_sweep(
             f"batch_size={batch_size}, final_metrics={last_metrics}",
         )
     return results
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", required=True)
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    config = load_run_config(args.config)
+    experiment_type = config["experiment_type"]
+    base_config = TrainingConfig(**config["base_config"])
+
+    if experiment_type == "learning_rate_sweep":
+        results = run_learning_rate_sweep(base_config, config["learning_rates"])
+    elif experiment_type == "batch_size_sweep":
+        results = run_batch_size_sweep(base_config, config["batch_sizes"])
+    else:
+        raise ValueError(f"Unknown experiment_type: {experiment_type}")
+
+    logger = ExperimentLogger(
+        results_dir=base_config.results_dir,
+        run_name=f"{base_config.run_name}_{experiment_type}",
+        config=config,
+    )
+    logger.append_experiment_note(
+        experiment_type,
+        json.dumps(results, ensure_ascii=False, indent=2),
+    )
+
+
+if __name__ == "__main__":
+    main()

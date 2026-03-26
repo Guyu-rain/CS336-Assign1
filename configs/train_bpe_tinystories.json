@@ -1,0 +1,10 @@
+{
+  "input_path": "data/TinyStoriesV2-GPT4-train.txt",
+  "vocab_size": 10000,
+  "special_tokens": [
+    "<|endoftext|>"
+  ],
+  "vocab_output_path": "data/tokenizer/vocab.json",
+  "merges_output_path": "data/tokenizer/merges.json",
+  "num_workers": 4
+}

@@ -1,99 +1,83 @@
-# cs336_basics
+# llm_from_scratch
 
-最小训练/实验/生成入口都放在 `cs336_basics/training/` 下，结果默认写到仓库根目录的 `results/`。
+最小训练/实验/生成入口都放在 `src/training/` 下，参数配置集中放在仓库根目录的 `configs/`，结果默认写到 `results/`。
 
-## 1. 训练 tokenizer
+## 1. 训练 BPE tokenizer
 
 ```bash
-uv run python -m cs336_basics.tokenizer.train_bpe \
-  --input_path data/TinyStoriesV2-GPT4-train.txt \
-  --vocab_size 10000 \
-  --special_tokens "<|endoftext|>"
+UV_NO_SYNC=1 UV_CACHE_DIR=.uv-cache uv run python -m src.tokenizer.train_bpe \
+  --config configs/train_bpe_tinystories.json
 ```
 
-如果你已经用自己的脚本产出了 `vocab.json` 和 `merges.json`，后面直接复用即可。
+这会生成：
+- `data/tokenizer/vocab.json`
+- `data/tokenizer/merges.json`
 
 ## 2. 把文本转成训练用 `.npy`
 
 ```bash
-uv run python -m cs336_basics.training.prepare_data \
-  --input-path data/TinyStoriesV2-GPT4-train.txt \
-  --output-path data/tinystories_train_tokens.npy \
-  --vocab-path path/to/vocab.json \
-  --merges-path path/to/merges.json \
-  --special-token "<|endoftext|>"
+UV_NO_SYNC=1 UV_CACHE_DIR=.uv-cache uv run python -m src.training.prepare_data \
+  --config configs/prepare_train.json
 ```
 
 验证集同理：
 
 ```bash
-uv run python -m cs336_basics.training.prepare_data \
-  --input-path data/TinyStoriesV2-GPT4-valid.txt \
-  --output-path data/tinystories_valid_tokens.npy \
-  --vocab-path path/to/vocab.json \
-  --merges-path path/to/merges.json \
-  --special-token "<|endoftext|>"
+UV_NO_SYNC=1 UV_CACHE_DIR=.uv-cache uv run python -m src.training.prepare_data \
+  --config configs/prepare_valid.json
 ```
 
 ## 3. 训练模型
 
-Apple Silicon / CPU 最小示例：
+训练指令现在只需要一行：
 
 ```bash
-uv run python -m cs336_basics.training.train_loop \
-  --train-data-path data/tinystories_train_tokens.npy \
-  --val-data-path data/tinystories_valid_tokens.npy \
-  --checkpoint-path results/tiny_mps/checkpoint.pt \
-  --results-dir results \
-  --run-name tiny_mps \
-  --device mps \
-  --batch-size 8 \
-  --context-length 128 \
-  --num-iterations 500 \
-  --d-model 128 \
-  --num-layers 2 \
-  --num-heads 4 \
-  --d-ff 384 \
-  --vocab-size 10000 \
-  --lr 3e-4 \
-  --min-lr 3e-5 \
-  --warmup-iters 50 \
-  --cosine-cycle-iters 500 \
-  --eval-every 50 \
-  --eval-iters 10 \
-  --log-every 10 \
-  --checkpoint-every 100
+UV_NO_SYNC=1 UV_CACHE_DIR=.uv-cache uv run python -m src.training.train_loop \
+  --config configs/train_tiny_mps.json
 ```
 
 说明：
 - `device` 可用 `cpu`、`mps` 或 `cuda:0`
 - 在 `mps` 上不要手动打开 TF32
-- 如果是低资源设备，优先减小 `batch-size`、`context-length`、`num-iterations`、`d-model`
+- 如果是低资源设备，优先修改 `configs/train_tiny_mps.json`
 
 ## 4. 生成文本
 
 ```bash
-uv run python -m cs336_basics.training.generate \
-  --checkpoint-path results/tiny_mps/checkpoint.pt \
-  --vocab-path path/to/vocab.json \
-  --merges-path path/to/merges.json \
-  --special-token "<|endoftext|>" \
-  --prompt "Once upon a time" \
-  --max-new-tokens 256 \
-  --temperature 0.8 \
-  --top-p 0.9 \
-  --device mps \
-  --results-dir results \
-  --run-name tiny_mps_generate \
-  --d-model 128 \
-  --num-layers 2 \
-  --num-heads 4 \
-  --d-ff 384 \
-  --vocab-size 10000 \
-  --context-length 128
+UV_NO_SYNC=1 UV_CACHE_DIR=.uv-cache uv run python -m src.training.generate \
+  --config configs/generate_tiny_mps.json
 ```
 
-## 5. `results/` 目录结构
+## 5. 运行实验
+
+学习率 sweep：
+
+```bash
+UV_NO_SYNC=1 UV_CACHE_DIR=.uv-cache uv run python -m src.training.experiments \
+  --config configs/experiment_lr_sweep.json
+```
+
+batch size sweep：
+
+```bash
+UV_NO_SYNC=1 UV_CACHE_DIR=.uv-cache uv run python -m src.training.experiments \
+  --config configs/experiment_batch_size.json
+```
+
+## 6. `configs/` 目录
+
+```text
+configs/
+  train_bpe_tinystories.json
+  prepare_train.json
+  prepare_valid.json
+  train_tiny_mps.json
+  generate_tiny_mps.json
+  experiment_lr_sweep.json
+  experiment_batch_size.json
+```
+
+## 7. `results/` 目录结构
 
 训练或生成后，结果会写成这种结构：
 

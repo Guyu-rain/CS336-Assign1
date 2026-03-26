@@ -1,0 +1,35 @@
+{
+  "experiment_type": "learning_rate_sweep",
+  "learning_rates": [
+    0.0001,
+    0.0003,
+    0.001
+  ],
+  "base_config": {
+    "train_data_path": "data/tinystories_train_tokens.npy",
+    "val_data_path": "data/tinystories_valid_tokens.npy",
+    "checkpoint_path": "results/tiny_mps/checkpoint.pt",
+    "results_dir": "results",
+    "run_name": "tiny_lr_sweep",
+    "batch_size": 8,
+    "context_length": 128,
+    "num_iterations": 200,
+    "d_model": 128,
+    "num_layers": 2,
+    "num_heads": 4,
+    "d_ff": 384,
+    "vocab_size": 10000,
+    "device": "mps",
+    "lr": 0.0003,
+    "min_lr": 0.00003,
+    "warmup_iters": 20,
+    "cosine_cycle_iters": 200,
+    "weight_decay": 0.01,
+    "grad_clip": 1.0,
+    "log_every": 10,
+    "eval_every": 50,
+    "eval_iters": 10,
+    "checkpoint_every": 100,
+    "compile_model": false
+  }
+}

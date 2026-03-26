@@ -31,7 +31,7 @@ module-name = "cs336_basics"
 module-root = ""
 
 [tool.uv]
-package = true
+package = false
 python-preference = "managed"
 
 [tool.pytest.ini_options]

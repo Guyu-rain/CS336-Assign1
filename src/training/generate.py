@@ -1,36 +1,62 @@
 import argparse
 import json
+from dataclasses import dataclass
 
 import torch
 
 from src.model.pre_norm_transformer_block import TransformerLM
 from src.tokenizer.core import BPE
 from src.training.checkpointing import load_checkpoint
+from src.training.config import build_dataclass_config, load_run_config
 from src.training.decoding import generate_text
 from src.training.experiment import ExperimentLogger
 
 
-def parse_args():
+@dataclass
+class GenerationConfig:
+    checkpoint_path: str
+    vocab_path: str
+    merges_path: str
+    prompt: str
+    results_dir: str
+    run_name: str
+    d_model: int
+    num_layers: int
+    num_heads: int
+    d_ff: int
+    vocab_size: int
+    context_length: int
+    max_new_tokens: int = 256
+    temperature: float = 1.0
+    top_p: float = 1.0
+    device: str = "cpu"
+    special_token: list[str] | None = None
+    theta: float = 10000.0
+
+
+def parse_args() -> GenerationConfig:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--checkpoint-path", required=True)
-    parser.add_argument("--vocab-path", required=True)
-    parser.add_argument("--merges-path", required=True)
-    parser.add_argument("--prompt", required=True)
-    parser.add_argument("--max-new-tokens", type=int, default=256)
-    parser.add_argument("--temperature", type=float, default=1.0)
-    parser.add_argument("--top-p", type=float, default=1.0)
-    parser.add_argument("--device", default="cpu")
-    parser.add_argument("--results-dir", default="results")
-    parser.add_argument("--run-name", default="generation")
-    parser.add_argument("--special-token", action="append", default=[])
-    parser.add_argument("--d-model", type=int, required=True)
-    parser.add_argument("--num-layers", type=int, required=True)
-    parser.add_argument("--num-heads", type=int, required=True)
-    parser.add_argument("--d-ff", type=int, required=True)
-    parser.add_argument("--vocab-size", type=int, required=True)
-    parser.add_argument("--context-length", type=int, required=True)
-    parser.add_argument("--theta", type=float, default=10000.0)
-    return parser.parse_args()
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--checkpoint-path")
+    parser.add_argument("--vocab-path")
+    parser.add_argument("--merges-path")
+    parser.add_argument("--prompt")
+    parser.add_argument("--max-new-tokens", type=int)
+    parser.add_argument("--temperature", type=float)
+    parser.add_argument("--top-p", type=float)
+    parser.add_argument("--device")
+    parser.add_argument("--results-dir")
+    parser.add_argument("--run-name")
+    parser.add_argument("--d-model", type=int)
+    parser.add_argument("--num-layers", type=int)
+    parser.add_argument("--num-heads", type=int)
+    parser.add_argument("--d-ff", type=int)
+    parser.add_argument("--vocab-size", type=int)
+    parser.add_argument("--context-length", type=int)
+    parser.add_argument("--theta", type=float)
+    args = parser.parse_args()
+    config_data = load_run_config(args.config)
+    return build_dataclass_config(GenerationConfig, config_data, vars(args))
 
 
 def main() -> None:
@@ -38,7 +64,7 @@ def main() -> None:
     tokenizer = BPE.from_files(
         vocab_filepath=args.vocab_path,
         merges_filepath=args.merges_path,
-        special_tokens=args.special_token,
+        special_tokens=args.special_token or [],
     )
 
     model = TransformerLM(

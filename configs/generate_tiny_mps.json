@@ -1,0 +1,22 @@
+{
+  "checkpoint_path": "results/tiny_mps/checkpoint.pt",
+  "vocab_path": "data/tokenizer/vocab.json",
+  "merges_path": "data/tokenizer/merges.json",
+  "prompt": "Once upon a time",
+  "results_dir": "results",
+  "run_name": "tiny_mps_generate",
+  "d_model": 128,
+  "num_layers": 2,
+  "num_heads": 4,
+  "d_ff": 384,
+  "vocab_size": 10000,
+  "context_length": 128,
+  "max_new_tokens": 256,
+  "temperature": 0.8,
+  "top_p": 0.9,
+  "device": "mps",
+  "special_token": [
+    "<|endoftext|>"
+  ],
+  "theta": 10000.0
+}

@@ -1,0 +1,10 @@
+{
+  "input_path": "data/TinyStoriesV2-GPT4-train.txt",
+  "output_path": "data/tinystories_train_tokens.npy",
+  "vocab_path": "data/tokenizer/vocab.json",
+  "merges_path": "data/tokenizer/merges.json",
+  "special_token": [
+    "<|endoftext|>"
+  ],
+  "dtype": "int32"
+}
