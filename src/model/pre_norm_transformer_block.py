@@ -1,7 +1,7 @@
 import math
 import torch
 from torch import nn
-from .basic_blocks import Embedding, Linear
+from .basic_blocks import Embedding, Linear, softmax, masked_softmax
 
 class RMSNorm(nn.Module):
     def __init__(
@@ -38,14 +38,18 @@ class PositionWiseFeedForward(nn.Module):
     def __init__(
         self,
         d_in: int,
+        d_ff: int | None = None,
         device: torch.device | None=None,
-        dtype: torch.dtype | None=None
+        dtype: torch.dtype | None=None,
     ):
         super().__init__()
         self.d_in = d_in
-        d_ff = int(8 * d_in / 3)
-        d_ff -= d_ff % 64
-        self.d_ff = d_ff
+        if d_ff is None:
+            d_ff = int(8 * d_in / 3)
+            d_ff -= d_ff % 64
+            self.d_ff = d_ff
+        else:
+            self.d_ff = d_ff
 
         self.w1 = Linear(d_in, d_ff, device=device, dtype=dtype)
         self.w2 = Linear(d_ff, d_in, device=device, dtype=dtype)
@@ -135,25 +139,7 @@ class RotaryPositionalEmbedding(nn.Module):
         out[..., 1::2] = out_odd
         return out
 
-def softmax(x: torch.Tensor, i: int) -> torch.Tensor:
-    x_max, _ = x.max(dim=i, keepdim=True)
-    x_exp = torch.exp(x - x_max)
-    return x_exp / x_exp.sum(dim=i, keepdim=True)
 
-def masked_softmax(
-    x: torch.Tensor,
-    mask: torch.Tensor,
-    i: int,
-    inf: int=1e6
-) -> torch.Tensor:
-    if mask.dtype != torch.bool:
-        raise ValueError("mask must be a boolean tensor")
-
-    extra_dims = x.dim() - mask.dim()
-    mask = mask.view((1,) * extra_dims + mask.shape)
-
-    x = x.masked_fill(~mask, -inf)
-    return softmax(x, i)
 
 def scaled_dot_product_attention(
     queries: torch.Tensor,
@@ -178,15 +164,21 @@ class MultiheadSelfAttention(nn.Module):
         self,
         d_model: int,
         num_heads: int,
-        device: torch.device | None = None,
         theta: float = 10000.0,
-        max_seq_len: int = 4096
+        max_seq_len: int = 4096,
+        device: torch.device | None = None,
     ):
         super().__init__()
+
+        if d_model % num_heads != 0:
+            raise ValueError("d_model must be divisible by num_heads")
 
         self.d_model = d_model
         self.num_heads = num_heads
         self.d_k = d_model // num_heads
+
+        if self.d_k % 2 != 0:
+            raise ValueError("head dimension must be even for RoPE")
 
         self.w_q = Linear(d_model, d_model, device=device)
         self.w_k = Linear(d_model, d_model, device=device)
@@ -215,7 +207,7 @@ class MultiheadSelfAttention(nn.Module):
         output:
             (..., seq_len, d_model)
         """
-        seq_len = x.shape[-2]
+        *batch_dims, seq_len, _ = x.shape
 
         # 映射成 queries, keys, values
         q = self.w_q(x)
@@ -232,7 +224,6 @@ class MultiheadSelfAttention(nn.Module):
         v = v.transpose(-3, -2)
 
         token_position = torch.arange(seq_len, device=x.device)
-
         q = self.rope_q(q, token_position)
         k = self.rope_k(k, token_position)
 
@@ -242,7 +233,121 @@ class MultiheadSelfAttention(nn.Module):
 
         attn = scaled_dot_product_attention(q, k, v, mask)
         
-        attn = attn.transpose(-3, -2)
-        attn = attn.reshape(*x.shape[-2], seq_len, self.d_model)
+        attn = attn.transpose(-3, -2).reshape(*batch_dims, seq_len, self.d_model)
 
         return self.w_o(attn)
+
+class TransformerBlock(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        d_ff: int | None = None,
+        eps: float = 1e-5,
+        theta: float = 10000.0,
+        max_seq_len: int = 4096,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
+        super().__init__()
+        # 注意：两个 norm 参数不共用
+        self.attn_norm = RMSNorm(
+            d_model,
+            eps=eps,
+            device=device,
+            dtype=dtype
+        )
+
+        self.attn = MultiheadSelfAttention(
+            d_model,
+            num_heads,
+            theta=theta,
+            max_seq_len=max_seq_len,
+            device=device,
+        )
+
+        self.ffn_norm = RMSNorm(
+            d_model,
+            eps=eps,
+            device=device,
+            dtype=dtype
+        )
+        self.ffn = PositionWiseFeedForward(
+            d_in=d_model,
+            d_ff=d_ff,
+            device=device,
+            dtype=dtype,
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+    ) -> torch.Tensor:
+        x = x + self.attn(self.attn_norm(x))
+        x = x + self.ffn(self.ffn_norm(x))
+        return x
+
+class TransformerLM(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        vocab_size: int,
+        context_length: int,
+        num_layers: int,
+        d_ff: int | None = None,
+        eps: float = 1e-5,
+        theta: float = 10000.0,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
+        super().__init__()
+
+        self.num_layers = num_layers
+
+        self.embedding = Embedding(
+            vocab_size,
+            d_model,
+            device=device,
+            dtype=dtype,
+        )
+
+        self.layers = nn.ModuleList([
+            TransformerBlock(
+            d_model,
+            num_heads,
+            d_ff=d_ff,
+            eps=eps,
+            theta=theta,
+            max_seq_len=context_length,
+            device=device,
+            dtype=dtype,
+            ) for _ in range(num_layers)
+        ])
+
+        self.final_norm = RMSNorm(
+            d_model,
+            eps=eps,
+            device=device,
+            dtype=dtype,
+        )
+        self.lm_head = Linear(
+            d_model,
+            vocab_size,
+            device=device,
+            dtype=dtype
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor
+    ) -> torch.Tensor:
+        x = self.embedding(x)
+
+        for layer in self.layers:
+            x = layer(x)
+
+        x = self.final_norm(x)
+        logits = self.lm_head(x)
+
+        return logits

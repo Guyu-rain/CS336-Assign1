@@ -114,7 +114,7 @@ wheels = [
 ]
 
 [[package]]
-name = "cs336-basics"
+name = "llm_from_scratch"
 version = "1.0.6"
 source = { editable = "." }
 dependencies = [

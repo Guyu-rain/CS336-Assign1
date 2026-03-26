@@ -46,4 +46,22 @@ class Embedding(nn.Module):
         """
         return self.weight[token_ids]
 
+def softmax(x: torch.Tensor, i: int) -> torch.Tensor:
+    x_max, _ = x.max(dim=i, keepdim=True)
+    x_exp = torch.exp(x - x_max)
+    return x_exp / x_exp.sum(dim=i, keepdim=True)
 
+def masked_softmax(
+    x: torch.Tensor,
+    mask: torch.Tensor,
+    i: int,
+    inf: int=1e6
+) -> torch.Tensor:
+    if mask.dtype != torch.bool:
+        raise ValueError("mask must be a boolean tensor")
+
+    extra_dims = x.dim() - mask.dim()
+    mask = mask.view((1,) * extra_dims + mask.shape)
+
+    x = x.masked_fill(~mask, -inf)
+    return softmax(x, i)
