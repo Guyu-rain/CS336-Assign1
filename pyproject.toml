@@ -38,6 +38,7 @@ python-preference = "managed"
 log_cli = true
 log_cli_level = "WARNING"
 addopts = "-s"
+norecursedirs = ["results", ".tmp", ".pytest_cache_local", ".uv-cache"]
 
 [tool.ruff]
 line-length = 120

@@ -12,7 +12,7 @@
   "num_heads": 4,
   "d_ff": 384,
   "vocab_size": 10000,
-  "device": "mps",
+  "device": "cpu",
   "lr": 0.0003,
   "min_lr": 0.00003,
   "warmup_iters": 50,

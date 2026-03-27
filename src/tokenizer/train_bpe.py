@@ -1,6 +1,7 @@
 import argparse
 from dataclasses import dataclass
 
+from .constants import DEFAULT_PRETOKENIZATION_PATTERN
 from .trainer import (
     DEFAULT_TRAINING_DATA_PATH as DATA_PATH,
     b64_to_bytes as _b64_to_bytes,

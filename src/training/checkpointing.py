@@ -15,7 +15,11 @@ def save_checkpoint(
         "optimizer": optimizer.state_dict(),
         "iteration": iteration,
     }
-    torch.save(checkpoint, out)
+    if isinstance(out, (str, os.PathLike)):
+        with open(out, "wb") as handle:
+            torch.save(checkpoint, handle)
+    else:
+        torch.save(checkpoint, out)
 
 
 def load_checkpoint(
@@ -23,7 +27,11 @@ def load_checkpoint(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
 ) -> int:
-    checkpoint = torch.load(src, map_location="cpu")
+    if isinstance(src, (str, os.PathLike)):
+        with open(src, "rb") as handle:
+            checkpoint = torch.load(handle, map_location="cpu")
+    else:
+        checkpoint = torch.load(src, map_location="cpu")
     model.load_state_dict(checkpoint["model"])
     optimizer.load_state_dict(checkpoint["optimizer"])
     return int(checkpoint["iteration"])

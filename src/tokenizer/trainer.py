@@ -62,6 +62,7 @@ def _pretokenize_chunk(
     with open(input_path, "rb") as handle:
         handle.seek(start)
         chunk_text = handle.read(end - start).decode("utf-8", errors="ignore")
+        chunk_text = chunk_text.replace("\r\n", "\n").replace("\r", "\n")
 
     local_corpus: dict[tuple[bytes, ...], int] = collections.defaultdict(int)
     special_token_set = set(special_tokens)
@@ -95,8 +96,14 @@ def parallel_pretokenize(
 
     chunk_boundaries = list(zip(boundaries[:-1], boundaries[1:]))
     args = [(input_path, start, end, special_tokens, pattern) for start, end in chunk_boundaries]
-    with Pool(processes=num_workers) as pool:
-        partial_corpora = pool.map(_pretokenize_chunk, args)
+    try:
+        with Pool(processes=num_workers) as pool:
+            partial_corpora = pool.map(_pretokenize_chunk, args)
+    except (OSError, PermissionError):
+        # Some constrained Windows environments disallow the named-pipe setup
+        # used by multiprocessing.Pool. Fall back to an in-process path so the
+        # tokenizer still works correctly.
+        partial_corpora = [_pretokenize_chunk(arg) for arg in args]
     return _merge_corpus_dicts(partial_corpora)
 
 

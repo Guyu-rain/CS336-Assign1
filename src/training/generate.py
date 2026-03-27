@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 from dataclasses import dataclass
 
 import torch
@@ -121,7 +122,7 @@ def main() -> None:
         ),
     )
 
-    print(result["text"])
+    sys.stdout.buffer.write((result["text"] + "\n").encode("utf-8", errors="replace"))
 
 
 if __name__ == "__main__":
